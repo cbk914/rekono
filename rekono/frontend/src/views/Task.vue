@@ -4,26 +4,22 @@
       <b-row>
         <b-col v-if="currentTask.target">
           <p>{{ currentTask.target.target }}</p>
-          <b-badge variant="secondary">{{ currentTask.target.type }}</b-badge>
+          <p v-for="i in intensityByVariant" :key="i.value">
+            <b-badge v-if="i.intensity_rank === currentTask.intensity_rank" :variant="i.variant">{{ currentTask.intensity_rank }}</b-badge>
+          </p>
         </b-col>
         <b-col>  
           <p v-if="currentTask.process">{{ currentTask.process.name }}</p>
           <p v-if="currentTask.tool">{{ currentTask.tool.name }}</p>
           <p v-if="currentTask.configuration">{{ currentTask.configuration.name }}</p>
-          <p v-for="i in intensityByVariant" :key="i.value">
-            <b-badge v-if="i.intensity_rank === currentTask.intensity_rank" :variant="i.variant">{{ currentTask.intensity_rank }}</b-badge>
-          </p>
         </b-col>
         <b-col>
-          <p v-for="i in statusByVariant" :key="i.value">
-            <b-badge v-if="i.value === currentTask.status" :variant="i.variant">{{ currentTask.status }}</b-badge>
-          </p>
-          <p v-if="currentTask.start">Started at {{ currentTask.start.replace('T', ' ').substring(0, 19) }}</p>
-          <p v-if="currentTask.end">Finished at {{ currentTask.end.replace('T', ' ').substring(0, 19) }}</p>
+          <p v-if="currentTask.start">{{ formatDate(currentTask.start) }}</p>
+          <p v-if="currentTask.end">{{ duration(currentTask.start, currentTask.end) }}</p>
         </b-col>
         <b-col v-if="currentTask && currentTask.status !== 'Cancelled' && (currentTask.scheduled_at || currentTask.scheduled_in || currentTask.repeat_in)">      
           <p v-if="currentTask.status !== 'Requested' && (currentTask.scheduled_at || currentTask.scheduled_in)"><b-badge variant="success">Scheduled</b-badge></p>
-          <p v-if="currentTask.status === 'Requested' && currentTask.scheduled_at">Scheduled at {{ currentTask.scheduled_at.replace('T', ' ').substring(0, 19) }}</p>
+          <p v-if="currentTask.status === 'Requested' && currentTask.scheduled_at">Scheduled at {{ formatDate(currentTask.scheduled_at) }}</p>
           <p v-if="currentTask.status === 'Requested' && currentTask.scheduled_in">Scheduled in {{ currentTask.scheduled_in }} {{ currentTask.scheduled_time_unit }}</p>
           <p v-if="currentTask.repeat_in"><b-badge variant="primary">Periodical</b-badge></p>
           <p v-if="currentTask.repeat_in">Every {{ currentTask.repeat_in }} {{ currentTask.repeat_time_unit }}</p>
@@ -42,8 +38,8 @@
           <b-table sticky-header="40rem" select-mode="single" selectable hover striped borderless head-variant="dark" :fields="executionsFields" :items="executions" @row-selected="selectExecution">
             <template #cell(tool)="row">
               <b-link :href="row.item.tool.reference" target="_blank">
-                <b-img v-if="row.item.tool.icon" :src="row.item.tool.icon" width="50" height="30"/>
-                <b-img v-if="!row.item.tool.icon" src="favicon.ico"/>
+                <b-img v-if="row.item.tool.icon" :src="row.item.tool.icon" width="32"/>
+                <b-img v-if="!row.item.tool.icon" src="favicon.ico" width="32"/>
               </b-link>
               {{ row.item.tool.name }}
             </template>
@@ -53,7 +49,10 @@
               </div>
             </template>
             <template #cell(date)="row">
-              {{ row.item.end !== null ? row.item.end.replace('T', ' ').substring(0, 19) : '' }}
+              {{ row.item.start !== null ? formatDate(row.item.start) : '' }}
+            </template>
+            <template #cell(duration)="row">
+              {{ row.item.end !== null ? duration(row.item.start, row.item.end) : '' }}
             </template>
           </b-table>
         </b-col>
@@ -93,8 +92,8 @@
 import RekonoApi from '@/backend/RekonoApi'
 import Deletion from '@/common/Deletion'
 import Findings from '@/components/findings/Findings'
-import TaskRepeat from '@/modals/TaskRepeat'
 import NotFound from '@/errors/NotFound'
+import TaskRepeat from '@/modals/TaskRepeat'
 export default {
   name: 'taskPage',
   mixins: [RekonoApi],
@@ -112,9 +111,9 @@ export default {
       executionsFields: [
         { key: 'tool', sortable: true },
         { key: 'configuration.name', label: 'Configuration', sortable: true},
-        { key: 'tool.stage', label: 'Stage', sortable: true },
         { key: 'status', sortable: true },
-        { key: 'date', sortable: true }
+        { key: 'date', sortable: true },
+        { key: 'duration', label: 'Duration', sortable: true }
       ],
       selectedExecution: null,
       reloadFindings: false
@@ -154,7 +153,7 @@ export default {
       }
     },
     fetchExecutions () {
-      this.getAllPages('/api/executions/', { task: this.$route.params.id, order: 'end,-status' })
+      this.getAllPages('/api/executions/', { task: this.$route.params.id, o: 'end,-status' })
         .then(results => {
           this.executions = results
           if (this.executions.length === 1) {

@@ -1,7 +1,7 @@
+import { accessTokenKey, decodeToken, processTokens, removeTokens } from '@/backend/tokens'
+import router from '@/router'
 import Vue from 'vue'
 import Vuex from 'vuex'
-import router from '@/router'
-import { accessTokenKey, removeTokens, decodeToken, processTokens } from '@/backend/tokens'
 
 Vue.use(Vuex)
 
@@ -13,6 +13,7 @@ export default new Vuex.Store({
     role: null,
     mainTabs: true,
     refreshing: false,
+    backendUrl: process.env.IS_ELECTRON && process.env.NODE_ENV === 'production'? process.env.VUE_APP_DESKTOP_BACKEND_URL : null
   },
   mutations: {
     authenticateUser (state, userData) {
@@ -31,7 +32,7 @@ export default new Vuex.Store({
   },
   actions: {
     checkState ({ state, commit }) {
-      const accessToken = localStorage.getItem(accessTokenKey)
+      const accessToken = sessionStorage.getItem(accessTokenKey)
       if (accessToken) {
         commit('authenticateUser', decodeToken(accessToken))
       } else {

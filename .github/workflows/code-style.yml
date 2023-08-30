@@ -2,34 +2,32 @@ name: Code style
 on:
   workflow_dispatch:
   pull_request:
+    paths:
+      - 'rekono/**'
 
 jobs:
   flake8:
     runs-on: ubuntu-latest
-    steps:
+    steps:      
       - name: Checkout
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-      
-      - name: Checkout
-        if: github.event_name != 'pull_request'
-        uses: actions/checkout@v2
       
       - name: Flake8 check
-        uses: valentijnscholten/flake8-your-pr@master
+        uses: valentijnscholten/flake8-your-pr@8115e1590de049c223a7b629828cfa9354d8856e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   mypy:
     runs-on: ubuntu-latest
-    steps:
+    steps:      
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
       
@@ -48,7 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       
       - name: Install ESLint
         working-directory: rekono/frontend

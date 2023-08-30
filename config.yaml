@@ -1,13 +1,12 @@
+rootpath: null
 frontend:
-  url: http://127.0.0.1:3000
+  url: https://127.0.0.1
 security:
   # secret-key: 
   allowed-hosts:
     - 127.0.0.1
     - localhost
     - ::1
-  otp-expiration-hours: 24
-  upload-files-max-mb: 500
 database:
   name: rekono
   # user:
@@ -18,27 +17,17 @@ rq:
   host: 127.0.0.1
   port: 6379
 email:
-  # host: 
-  # port: 
+  # host:
+  # port:
   # user:
   # password:
   tls: true
-telegram:
-  bot: Rekono
-  # token: 
-defect-dojo:
-  # url: 
-  # api-key:
-  verify: false
-  tags:
-    - rekono
-  product-type: Rekono Project
-  test-type: Rekono Findings Import
-  test: Rekono Test
 tools:
   cmseek:
     directory: /usr/share/cmseek
-  log4j-scanner:
-    directory: /opt/log4j-scanner
+  log4j-scan:
+    directory: /opt/log4j-scan
+  spring4shell-scan:
+    directory: /opt/spring4shell-scan
   gittools:
     directory: /opt/GitTools

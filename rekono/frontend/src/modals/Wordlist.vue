@@ -5,7 +5,7 @@
         <b-form-input v-model="name" type="text" :state="nameState" maxlength="50"/>
       </b-form-group>
       <b-form-group description="Type">
-        <b-form-select v-model="type" :options="types"/>
+        <b-form-select v-model="type" :options="wordlistTypes"/>
       </b-form-group>
       <b-form-group description="File" :invalid-feedback="invalidFile" v-if="!edit">
         <b-form-file v-model="file" accept="text/plain" placeholder="Select the wordlist file" drop-placeholder="Drop the wordlist here" :state="fileState"/>
@@ -42,7 +42,6 @@ export default {
     return {
       name: null,
       type: 'Endpoint',
-      types: ['Endpoint', 'Password'],
       file: null,
       nameState: null,
       fileState: null,
@@ -87,14 +86,14 @@ export default {
     },
     create () {
       return this.post(
-        '/api/resources/wordlists/',
+        '/api/wordlists/',
         this.getFormData(),
         this.name, 'New wordlist created successfully',
         true, { 'Content-Type': 'multipart/form-data' }
       )
     },
     update () {
-      return this.put(`/api/resources/wordlists/${this.wordlist.id}/`, { 'name': this.name, 'type': this.type }, this.name, 'Wordlist updated successfully')
+      return this.put(`/api/wordlists/${this.wordlist.id}/`, { 'name': this.name, 'type': this.type }, this.name, 'Wordlist updated successfully')
     },
     getFormData () {
       const data = new FormData()

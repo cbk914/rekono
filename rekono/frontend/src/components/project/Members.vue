@@ -9,13 +9,13 @@
         {{ row.item.last_login !== null ? row.item.last_login.split('.', 1)[0].replace('T', ' ') : '' }}
       </template>
       <template #cell(actions)="row">
-        <b-button variant="outline" @click="selectUser(row.item)" v-b-modal.delete-member-modal v-b-tooltip.hover title="Remove Member" :disabled="row.item.id === $store.state.user">
+        <b-button variant="outline" @click="selectedUser = row.item" v-b-modal.delete-member-modal v-b-tooltip.hover title="Remove Member" :disabled="row.item.id === $store.state.user">
           <b-icon variant="danger" icon="trash-fill"/>
         </b-button>
       </template>
     </b-table>
     <pagination :page="page" :limit="limit" :limits="limits" :total="total" name="members" @pagination="pagination"/>
-    <deletion id="delete-member-modal" title="Delete Member" @deletion="deleteMember" @clean="cleanSelection" v-if="selectedUser !== null">
+    <deletion id="delete-member-modal" title="Delete Member" @deletion="deleteMember" @clean="selectedUser = null" v-if="selectedUser !== null">
       <span><strong>{{ selectedUser.username }}</strong> member</span>
     </deletion>
     <project-member id="add-member-modal" :projectId="$route.params.id" @confirm="confirm"/>
@@ -25,8 +25,8 @@
 <script>
 import RekonoApi from '@/backend/RekonoApi'
 import Deletion from '@/common/Deletion'
-import TableHeader from '@/common/TableHeader'
 import Pagination from '@/common/Pagination'
+import TableHeader from '@/common/TableHeader'
 import ProjectMember from '@/modals/ProjectMember'
 export default {
   name: 'projectMembersPage',
@@ -65,9 +65,10 @@ export default {
     }
   },
   methods: {
-    fetchData (params = { }) {
+    fetchData (params = {}) {
       params.project = this.$route.params.id
-      return this.getOnePage('/api/users/?o=username', params)
+      params.o = 'username'
+      return this.getOnePage('/api/users/', params)
         .then(response => {
           this.data = response.data.results
           this.total = response.data.count
@@ -75,12 +76,6 @@ export default {
     },
     deleteMember () {
       this.delete(`/api/projects/${this.$route.params.id}/members/${this.selectedUser.id}/`, this.selectedUser.username, 'Member deleted successfully').then(() => this.fetchData())
-    },
-    selectUser (user) {
-      this.selectedUser = user
-    },
-    cleanSelection () {
-      this.selectedUser = null
     }
   }
 }

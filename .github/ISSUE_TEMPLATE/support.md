@@ -7,5 +7,4 @@ assignees: ''
 
 ---
 
-**What do you need?**
-Remember that you can also mail rekono.project@gmail.com
+**Describe your problem, your doubts or whatever you need**

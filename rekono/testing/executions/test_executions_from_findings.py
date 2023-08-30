@@ -3,8 +3,6 @@ from typing import Any
 from django.db.models import Model
 from django.test import TestCase
 from django.utils import timezone
-from executions.models import Execution
-from executions.utils import get_executions_from_findings
 from findings.models import Host, Path, Port
 from input_types.base import BaseInput
 from input_types.models import InputType
@@ -12,11 +10,14 @@ from projects.models import Project
 from resources.enums import WordlistType
 from resources.models import Wordlist
 from targets.enums import TargetType
-from targets.models import Target, TargetEndpoint, TargetPort
+from targets.models import Target, TargetPort
 from tasks.enums import Status
 from tasks.models import Task
 from tools.enums import IntensityRank, Stage
 from tools.models import Argument, Configuration, Input, Tool
+
+from executions.models import Execution
+from executions.utils import get_executions_from_findings
 
 
 class ExecutionsFromFindingsTest(TestCase):
@@ -26,8 +27,13 @@ class ExecutionsFromFindingsTest(TestCase):
         '''Create initial data before run tests.'''
         super().setUp()
         # Tool for testing
-        self.tool = Tool.objects.create(name='Test', command='ls', stage=Stage.ENUMERATION)
-        configuration = Configuration.objects.create(name='Test', tool=self.tool, arguments='-la')
+        self.tool = Tool.objects.create(name='Test', command='ls')
+        configuration = Configuration.objects.create(
+            name='Test',
+            tool=self.tool,
+            arguments='-la',
+            stage=Stage.ENUMERATION
+        )
         # Host argument
         test_host = Argument.objects.create(tool=self.tool, name='test_host', required=True)
         Input.objects.create(argument=test_host, type=InputType.objects.get(name='Host'))
@@ -37,14 +43,14 @@ class ExecutionsFromFindingsTest(TestCase):
         Input.objects.create(argument=test_enum, type=InputType.objects.get(name='Technology'), order=2)
         Input.objects.create(argument=test_enum, type=InputType.objects.get(name='Port'), order=3)
         # Path argument
-        test_path = Argument.objects.create(tool=self.tool, name='test_path', required=True)
+        test_path = Argument.objects.create(tool=self.tool, name='test_path', required=False)
         Input.objects.create(argument=test_path, type=InputType.objects.get(name='Path'))
         # Wordlist argument
         test_word = Argument.objects.create(tool=self.tool, name='test_word', required=False)
         Input.objects.create(argument=test_word, type=InputType.objects.get(name='Wordlist'))
         # Project > Target > Task > Execution to create findings for testing
         self.project = Project.objects.create(name='Test', description='Test', tags=['test'])
-        self.target = Target.objects.create(project=self.project, target='10.10.10.10', type=TargetType.PRIVATE_IP)
+        self.target = Target.objects.create(project=self.project, target='scanme.nmap.org', type=TargetType.DOMAIN)
         task = Task.objects.create(
             target=self.target,
             tool=self.tool,
@@ -77,7 +83,7 @@ class ExecutionsFromFindingsTest(TestCase):
         return finding
 
     def test_with_findings(self) -> None:
-        '''Test get_executions_from_findings feature with findings. Simulates new executions from previous findings.'''
+        '''Test get_executions_from_findings feature with findings.'''
         # Host 1 with some endpoints in some ports
         host_1 = self.create_finding(Host, address='10.10.10.1')
         port_1_1 = self.create_finding(Port, host=host_1, port=22)
@@ -157,51 +163,40 @@ class ExecutionsFromFindingsTest(TestCase):
         executions = get_executions_from_findings(findings, self.tool)
         self.assertEqual(expected, executions)
 
+    def test_with_only_one_finding_type(self) -> None:
+        '''Test get_executions_from_findings feature with findings.'''
+        host_1 = self.create_finding(Host, address='10.10.10.1')
+        host_2 = self.create_finding(Host, address='10.10.10.2')
+        host_3 = self.create_finding(Host, address='10.10.10.3')
+        host_4 = self.create_finding(Host, address='10.10.10.4')
+        findings = [host_1, host_2, host_3, host_4]                             # Finding list to pass as argument
+        expected = [[host_1], [host_2], [host_3], [host_4]]                     # Expected executions
+        executions = get_executions_from_findings(findings, self.tool)
+        self.assertEqual(expected, executions)
+
     def test_with_targets(self) -> None:
-        '''Test get_executions_from_findings feature with targets. Simulates initial new executions.'''
-        # Target ports with some target endpoints
+        '''Test get_executions_from_findings feature with targets.'''
+        # Target ports
         tp_1 = TargetPort.objects.create(target=self.target, port=22)
         tp_2 = TargetPort.objects.create(target=self.target, port=80)
-        te_2_1 = TargetEndpoint.objects.create(target_port=tp_2, endpoint='/endpoint')
         tp_3 = TargetPort.objects.create(target=self.target, port=443)
-        te_3_1 = TargetEndpoint.objects.create(target_port=tp_3, endpoint='/endpoint1')
-        te_3_2 = TargetEndpoint.objects.create(target_port=tp_3, endpoint='/endpoint2')
         tp_4 = TargetPort.objects.create(target=self.target, port=8080)
-        te_4_1 = TargetEndpoint.objects.create(target_port=tp_4, endpoint='/endpoint1')
-        te_4_2 = TargetEndpoint.objects.create(target_port=tp_4, endpoint='/endpoint2')
-        te_4_3 = TargetEndpoint.objects.create(target_port=tp_4, endpoint='/endpoint3')
         tp_5 = TargetPort.objects.create(target=self.target, port=8000)
         # Wordlists
-        wl_1 = Wordlist.objects.create(name='Wordlist 1', type=WordlistType.PASSWORD, path='/some/path/1')
-        wl_2 = Wordlist.objects.create(name='Wordlist 2', type=WordlistType.PASSWORD, path='/some/path/2')
+        wl_1 = Wordlist.objects.create(name='Wordlist 1', type=WordlistType.ENDPOINT, path='/some/path/1')
+        wl_2 = Wordlist.objects.create(name='Wordlist 2', type=WordlistType.ENDPOINT, path='/some/path/2')
         wl_3 = Wordlist.objects.create(name='Wordlist 3', type=WordlistType.ENDPOINT, path='/some/path/3')
         # Target list to pass as argument
         targets = [
             wl_1, wl_2, wl_3,
             self.target,
-            tp_1, tp_2, tp_3, tp_4, tp_5,
-            te_2_1, te_3_1, te_3_2, te_4_1, te_4_2, te_4_3
+            tp_1, tp_2, tp_3, tp_4, tp_5
         ]
         # Expected executions
         expected = [
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_2_1, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_1, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_2, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_1, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_2, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_3, wl_1],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_2_1, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_1, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_2, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_1, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_2, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_3, wl_2],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_2_1, wl_3],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_1, wl_3],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_3_2, wl_3],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_1, wl_3],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_2, wl_3],
-            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, te_4_3, wl_3],
+            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, wl_1],
+            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, wl_2],
+            [self.target, tp_1, tp_2, tp_3, tp_4, tp_5, wl_3],
         ]
         executions = get_executions_from_findings(targets, self.tool)
         self.assertEqual(expected, executions)

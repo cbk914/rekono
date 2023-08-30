@@ -1,153 +1,37 @@
 from typing import Any, Dict
 
+from authentications.serializers import AuthenticationSerializer
 from django.forms import ValidationError
 from rest_framework import serializers
-from targets.models import (Target, TargetEndpoint, TargetPort,
-                            TargetTechnology, TargetVulnerability)
+
+from targets.models import Target, TargetPort
 from targets.utils import get_target_type
 
 
-class TargetVulnerabilitySerializer(serializers.ModelSerializer):
-    '''Serializer to manage target vulnerabilities via API.'''
+class SimplyTargetSerializer(serializers.ModelSerializer):
+    '''Simply serializer to include target main data in other serializers.'''
 
     class Meta:
         '''Serializer metadata.'''
 
-        model = TargetVulnerability
-        # Target vulnerabilities fields exposed via API
-        fields = ('id', 'target_port', 'cve')
-
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
-        '''Validate the provided data before use it.
-
-        Args:
-            attrs (Dict[str, Any]): Provided data
-
-        Raises:
-            ValidationError: Raised if provided data is invalid
-
-        Returns:
-            Dict[str, Any]: Data after validation process
-        '''
-        attrs = super().validate(attrs)
-        if TargetVulnerability.objects.filter(target_port=attrs['target_port'], cve=attrs['cve']).exists():
-            raise ValidationError({'cve': 'This CVE already exists in this target port'})
-        return attrs
-
-
-class TargetTechnologySerializer(serializers.ModelSerializer):
-    '''Serializer to manage target technologies via API.'''
-
-    class Meta:
-        '''Serializer metadata.'''
-
-        model = TargetTechnology
-        # Target technology fields exposed via API
-        fields = ('id', 'target_port', 'name', 'version')
-
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
-        '''Validate the provided data before use it.
-
-        Args:
-            attrs (Dict[str, Any]): Provided data
-
-        Raises:
-            ValidationError: Raised if provided data is invalid
-
-        Returns:
-            Dict[str, Any]: Data after validation process
-        '''
-        attrs = super().validate(attrs)
-        if TargetTechnology.objects.filter(
-            target_port=attrs['target_port'],
-            name=attrs['name'],
-            version=attrs['version']
-        ).exists():
-            raise ValidationError({
-                'name': 'This name already exists in this target port',
-                'version': 'This version already exists for this technology in this target port'
-            })
-        return attrs
-
-
-class TargetEndpointSerializer(serializers.ModelSerializer):
-    '''Serializer to manage target endpoints via API.'''
-
-    class Meta:
-        '''Serializer metadata.'''
-
-        model = TargetEndpoint
-        fields = ('id', 'target_port', 'endpoint')                              # Target endpoint fields exposed via API
-
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
-        '''Validate the provided data before use it.
-
-        Args:
-            attrs (Dict[str, Any]): Provided data
-
-        Raises:
-            ValidationError: Raised if provided data is invalid
-
-        Returns:
-            Dict[str, Any]: Data after validation process
-        '''
-        attrs = super().validate(attrs)
-        if TargetEndpoint.objects.filter(target_port=attrs['target_port'], endpoint=attrs['endpoint']).exists():
-            raise ValidationError({'endpoint': 'This endpoint already exists in this target port'})
-        return attrs
-
-
-class TargetPortSerializer(serializers.ModelSerializer):
-    '''Serializer to manage target ports via API.'''
-
-    # Target endpoints details for read operations
-    target_endpoints = TargetEndpointSerializer(many=True, read_only=True)
-    # Target technologies details for read operations
-    target_technologies = TargetTechnologySerializer(many=True, read_only=True)
-    # Target vulnerabilities details for read operations
-    target_vulnerabilities = TargetVulnerabilitySerializer(many=True, read_only=True)
-
-    class Meta:
-        '''Serializer metadata.'''
-
-        model = TargetPort
-        fields = (                                                              # Target port fields exposed via API
-            'id', 'target', 'port', 'target_endpoints', 'target_technologies', 'target_vulnerabilities'
-        )
-        read_only_fields = ('target_endpoints',)                                # Read only fields
-
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
-        '''Validate the provided data before use it.
-
-        Args:
-            attrs (Dict[str, Any]): Provided data
-
-        Raises:
-            ValidationError: Raised if provided data is invalid
-
-        Returns:
-            Dict[str, Any]: Data after validation process
-        '''
-        attrs = super().validate(attrs)
-        if TargetPort.objects.filter(target=attrs['target'], port=attrs['port']).exists():
-            raise ValidationError({'port': 'This port already exists in this target'})
-        return attrs
+        model = Target
+        fields = ('id', 'project', 'target', 'type')                            # Target fields exposed via API
 
 
 class TargetSerializer(serializers.ModelSerializer):
     '''Serializer to manage targets via API.'''
-
-    # Target ports details for read operations
-    target_ports = TargetPortSerializer(many=True, read_only=True)
 
     class Meta:
         '''Serializer metadata.'''
 
         model = Target
         fields = (                                                              # Target fields exposed via API
-            'id', 'project', 'target', 'type', 'defectdojo_engagement_id', 'target_ports', 'tasks'
+            'id', 'project', 'target', 'type', 'defectdojo_engagement_id',
+            'target_ports', 'input_technologies', 'input_vulnerabilities', 'tasks'
         )
-        read_only_fields = ('type', 'target_ports', 'tasks')                    # Read only fields
+        read_only_fields = (                                                    # Read only fields
+            'type', 'target_ports', 'input_technologies', 'input_vulnerabilities', 'tasks'
+        )
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         '''Validate the provided data before use it.
@@ -168,11 +52,34 @@ class TargetSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class SimplyTargetSerializer(serializers.ModelSerializer):
-    '''Simply serializer to include target main data in other serializers.'''
+class TargetPortSerializer(serializers.ModelSerializer):
+    '''Serializer to manage target ports via API.'''
+
+    authentication = AuthenticationSerializer(many=False, read_only=True)       # Authentication details for read ops
 
     class Meta:
         '''Serializer metadata.'''
 
-        model = Target
-        fields = ('id', 'project', 'target', 'type')                            # Target fields exposed via API
+        model = TargetPort
+        fields = (                                                              # Target port fields exposed via API
+            'id', 'target', 'port', 'authentication'
+        )
+        # Read only fields
+        read_only_fields = ('authentication',)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        '''Validate the provided data before use it.
+
+        Args:
+            attrs (Dict[str, Any]): Provided data
+
+        Raises:
+            ValidationError: Raised if provided data is invalid
+
+        Returns:
+            Dict[str, Any]: Data after validation process
+        '''
+        attrs = super().validate(attrs)
+        if TargetPort.objects.filter(target=attrs['target'], port=attrs['port']).exists():
+            raise ValidationError({'port': 'This port already exists in this target'})
+        return attrs

@@ -3,9 +3,6 @@ from typing import Any, Dict, List, Union, cast
 from defectdojo.constants import DD_DATE_FORMAT
 from django.db import models
 from executions.models import Execution
-from findings.enums import (DataType, OSType, PathType, PortStatus, Protocol,
-                            Severity)
-from findings.utils import get_unique_filter
 from input_types.base import BaseInput
 from input_types.enums import InputKeyword
 from input_types.utils import get_url
@@ -13,6 +10,10 @@ from projects.models import Project
 from targets.enums import TargetType
 from targets.utils import get_target_type
 from tools.models import Input, Tool
+
+from findings.enums import (DataType, OSType, PathType, PortStatus, Protocol,
+                            Severity)
+from findings.utils import get_unique_filter
 
 # Create your models here.
 
@@ -164,8 +165,12 @@ class Host(Finding):
         if not input.filter:
             return True
         try:
-            # Filter by address type
-            return cast(models.TextChoices, TargetType)[input.filter] == get_target_type(self.address)
+            distinct = input.filter[0] == '!'
+            filter_types = [
+                cast(models.TextChoices, TargetType)[f.upper()] for f in input.filter.replace('!', '').split(',s')
+            ]
+            host_type = get_target_type(self.address)
+            return host_type not in filter_types if distinct else host_type in filter_types
         except KeyError:
             return True
 
@@ -600,7 +605,7 @@ class Exploit(Finding):
     key_fields: List[Dict[str, Any]] = [                                        # Unique field list
         {'name': 'vulnerability_id', 'is_base': True},
         {'name': 'technology_id', 'is_base': True},
-        {'name': 'edb_id', 'is_base': False}
+        {'name': 'reference', 'is_base': False}
     ]
 
     def parse(self, accumulated: Dict[str, Any] = {}) -> Dict[str, Any]:

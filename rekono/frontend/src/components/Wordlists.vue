@@ -14,11 +14,11 @@
           <template #button-content>
             <b-icon variant="dark" icon="three-dots-vertical"/>
           </template>
-          <b-dropdown-item variant="dark" @click="selectWordlist(row.item)" v-b-modal.wordlist-modal :disabled="$store.state.role !== 'Admin' && (!row.item.creator || $store.state.user !== row.item.creator.id)">
+          <b-dropdown-item variant="dark" @click="selectedWordlist = row.item" v-b-modal.wordlist-modal :disabled="$store.state.role !== 'Admin' && (!row.item.creator || $store.state.user !== row.item.creator.id)">
             <b-icon icon="pencil-square"/>
             <label class="ml-1">Edit</label>
           </b-dropdown-item>
-          <b-dropdown-item variant="danger" @click="selectWordlist(row.item)" v-b-modal.delete-wordlist-modal :disabled="$store.state.role !== 'Admin' && (!row.item.creator || $store.state.user !== row.item.creator.id)">
+          <b-dropdown-item variant="danger" @click="selectedWordlist = row.item" v-b-modal.delete-wordlist-modal :disabled="$store.state.role !== 'Admin' && (!row.item.creator || $store.state.user !== row.item.creator.id)">
             <b-icon icon="trash-fill"/>
             <label class="ml-1">Delete</label>
           </b-dropdown-item>
@@ -26,18 +26,18 @@
       </template>
     </b-table>
     <pagination :page="page" :limit="limit" :limits="limits" :total="total" name="wordlists" @pagination="pagination"/>
-    <deletion id="delete-wordlist-modal" title="Delete Wordlist" @deletion="deleteWordlist" @clean="cleanSelection" v-if="selectedWordlist !== null && selectedWordlist !== null">
+    <deletion id="delete-wordlist-modal" title="Delete Wordlist" @deletion="deleteWordlist" @clean="selectedWordlist = null" v-if="selectedWordlist !== null && selectedWordlist !== null">
       <span><strong>{{ this.selectedWordlist.name }}</strong> wordlist</span>
     </deletion>
-    <wordlist id="wordlist-modal" :wordlist="selectedWordlist" :initialized="selectedWordlist !== null" @confirm="confirm" @clean="cleanSelection"/>
+    <wordlist id="wordlist-modal" :wordlist="selectedWordlist" :initialized="selectedWordlist !== null" @confirm="confirm" @clean="selectedWordlist = null"/>
   </div>
 </template>
 
 <script>
 import RekonoApi from '@/backend/RekonoApi'
 import Deletion from '@/common/Deletion'
-import TableHeader from '@/common/TableHeader'
 import Pagination from '@/common/Pagination'
+import TableHeader from '@/common/TableHeader'
 import Wordlist from '@/modals/Wordlist'
 export default {
   name: 'wordlistsPage',
@@ -67,35 +67,30 @@ export default {
   watch: {
     data () {
       this.filters = [
-        { name: 'Type', values: ['Endpoint', 'Password'], valueField: 'value', textField: 'value', filterField: 'type' },
+        { name: 'Type', values: ['Endpoint', 'Subdomain'], valueField: 'value', textField: 'value', filterField: 'type' },
         { name: 'Max Size', filterField: 'size__lte', type: 'number' },
         { name: 'Creator', filterField: 'creator__username__icontains', type: 'text' },
-        { name: 'Favourities', values: [{ value: true, text: 'True' }, { value: false, text: 'False' }], valueField: 'value', textField: 'text', filterField: 'liked' }
+        { name: 'Favourities', type: 'checkbox', filterField: 'liked' }
       ] 
     }
   },
   methods: {
-    fetchData (params = null) {
-      return this.getOnePage('/api/resources/wordlists/?o=type,name', params)
+    fetchData (params = {}) {
+      params.o = 'type,name'
+      return this.getOnePage('/api/wordlists/', params)
         .then(response => {
           this.data = response.data.results
           this.total = response.data.count
         })
     },
     deleteWordlist () {
-      this.delete(`/api/resources/wordlists/${this.selectedWordlist.id}/`, this.selectedWordlist.name, 'Wordlist deleted successfully').then(() => this.fetchData())
+      this.delete(`/api/wordlists/${this.selectedWordlist.id}/`, this.selectedWordlist.name, 'Wordlist deleted successfully').then(() => this.fetchData())
     },
     likeWordlist (wordlistId) {
-      this.post(`/api/resources/wordlists/${wordlistId}/like/`, { }).then(() => this.fetchData())
+      this.post(`/api/wordlists/${wordlistId}/like/`, { }).then(() => this.fetchData())
     },
     dislikeWordlist (wordlistId) {
-      this.post(`/api/resources/wordlists/${wordlistId}/dislike/`, { }).then(() => this.fetchData())
-    },
-    selectWordlist (wordlist) {
-      this.selectedWordlist = wordlist
-    },
-    cleanSelection () {
-      this.selectedWordlist = null
+      this.post(`/api/wordlists/${wordlistId}/dislike/`, { }).then(() => this.fetchData())
     }
   }
 }

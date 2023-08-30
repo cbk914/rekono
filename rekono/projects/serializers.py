@@ -1,18 +1,19 @@
 import logging
 from typing import Any, Dict
 
-from api.serializers import RekonoTagSerializerField
+from api.fields import RekonoTagField
 from defectdojo.api import DefectDojo
 from defectdojo.exceptions import DefectDojoException
 from django.db import transaction
 from django.forms import ValidationError
-from projects.models import Project
 from rest_framework import serializers
 from security.input_validation import validate_name, validate_text
 from taggit.serializers import TaggitSerializer
 from targets.serializers import TargetSerializer
 from users.models import User
 from users.serializers import SimplyUserSerializer
+
+from projects.models import Project
 
 logger = logging.getLogger()                                                    # Rekono logger
 
@@ -22,14 +23,13 @@ class ProjectSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     targets = TargetSerializer(read_only=True, many=True)                       # Targets details for reaad operations
     owner = SimplyUserSerializer(many=False, read_only=True)                    # Owner details for read operations
-    tags = RekonoTagSerializerField()                                           # Tags
+    tags = RekonoTagField()                                                     # Tags
 
     class Meta:
         '''Serializer metadata.'''
 
         model = Project
-        # Project fields exposed via API
-        fields = (
+        fields = (                                                              # Project fields exposed via API
             'id', 'name', 'description', 'defectdojo_product_id', 'defectdojo_engagement_id',
             'defectdojo_engagement_by_target', 'defectdojo_synchronization', 'owner', 'targets', 'members', 'tags'
         )

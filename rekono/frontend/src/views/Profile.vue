@@ -27,11 +27,11 @@
     <b-form ref="profile_form" @submit="handleUpdateProfile">
       <b-row align-h="center">
         <b-col cols="4">
-          <div class="mb-3">
+          <div class="mb-3" v-if="telegramBotName">
             <h4 v-if="telegramConfigured">
-              <b-badge variant="outline">
-                <b-icon variant="success" icon="patch-check-fill"/>
-                {{ telegramBot }} Bot is linked!
+              <b-badge :href="telegramBotLink" target="blank" variant="outline">
+                <b-icon variant="primary" icon="patch-check-fill"/>
+                @{{ telegramBotName }} is linked!
               </b-badge>
             </h4>
             <b-card align="center" v-if="!telegramConfigured">
@@ -53,9 +53,9 @@
                 </div>
                 <b-collapse id="telegram-steps" class="text-left">
                   <h4>Steps</h4>
-                  <p>1. Search the <strong>{{ telegramBot }}</strong> bot in Telegram</p>
+                  <p>1. Go to <a :href="telegramBotLink" target="blank"><strong>{{ telegramBotName }}</strong></a></p>
                   <p>2. Send the <strong>/start</strong> message to the bot</p>
-                  <p>3. <strong>{{ telegramBot }}</strong> will send you a temporal token</p>
+                  <p>3. <a :href="telegramBotLink" target="blank"><strong>{{ telegramBotName }}</strong></a> will send you a temporal token</p>
                   <p>4. Copy the token in this form</p>
                   <p>5. Now you can use the bot and receive notifications. Send the <strong>/help</strong> message to see the usage</p>
                 </b-collapse>
@@ -107,7 +107,7 @@
               </b-card-text>
             </b-collapse>
             <template #footer v-if="showRekonoApi">
-                <b-link class="text-danger" href="/api/schema/swagger-ui.html?docExpansion=none" target="_blank">API documentation</b-link>
+                <b-link class="text-danger" :href="getUrl('/api/schema/swagger-ui.html')" target="_blank">API documentation</b-link>
               </template>
           </b-card>
           <b-row class="mt-3" align-h="center">
@@ -165,6 +165,7 @@ export default {
   mixins: [RekonoApi],
   data () {
     this.getProfile()
+    this.getSettings()
     return {
       showTelegramSteps: false,
       id: null,
@@ -189,7 +190,7 @@ export default {
       passwordError: false,
       showTelegramBot: false,
       showRekonoApi: false,
-      isCopyHover: false,
+      isCopyHover: false
     }
   },
   components: {

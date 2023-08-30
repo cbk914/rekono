@@ -1,9 +1,10 @@
 
 <script>
-import axios from 'axios'
 import RekonoAlerts from '@/backend/RekonoAlerts'
 import RekonoPagination from '@/backend/RekonoPagination'
-import { accessTokenKey, refreshTokenKey, removeTokens, processTokens } from '@/backend/tokens'
+import { accessTokenKey, processTokens, refreshTokenKey, removeTokens } from '@/backend/tokens'
+import axios from 'axios'
+import moment from 'moment'
 export default {
   name: 'rekonoApi',
   mixins: [RekonoAlerts, RekonoPagination],
@@ -76,16 +77,29 @@ export default {
       ],
       cancellableStatuses: ['Requested', 'Running'],
       timeUnits: ['Weeks', 'Days', 'Hours', 'Minutes'],
-      nameRegex: /^[\wÀ-ÿ\s.\-[\]]*$/,
-      textRegex: /^[\wÀ-ÿ\s.:,+\-'"?¿¡!#%$€[\]]*$/,
-      pathRegex: /^[\w./#?&%]*$/,
-      cveRegex: /^CVE-[0-9]{4}-[0-9]{1,7}$/,
-      defectDojoEnabled: process.env.VUE_APP_DEFECTDOJO.toLowerCase() === 'true',
-      defectDojoUrl: process.env.VUE_APP_DEFECTDOJO_URL,
-      telegramBot: process.env.VUE_APP_TELEGRAM_BOT
+      authenticationTypes: ['None', 'Basic', 'Bearer', 'Cookie', 'Digest', 'JWT', 'NTLM'],
+      wordlistTypes: ['Endpoint', 'Subdomain'],
+      nameRegex: /^[\wÀ-ÿ\s.\-[\]()@]{0,120}$/,
+      textRegex: /^[\wÀ-ÿ\s.:,+\-'"?¿¡!#%$€[\]()]{0,300}$/,
+      cveRegex: /^CVE-\d{4}-\d{1,7}$/,
+      defectDojoKeyRegex: /^[\da-z]{40}$/,
+      telegramTokenRegex: /^\d{10}:[\w-]{35}$/,
+      credentialRegex: /^[\w./\-=+,:<>¿?¡!#&$()@%[\]{}*]{1,500}$/,
+      telegramBotName: null,
+      defectDojoUrl: null,
+      defectDojoEnabled: null,
+      backendRootPath: process.env.VUE_APP_ROOT_BACKEND_PATH
     }
   },
   methods: {
+    getSettings () {
+      this.get('/api/system/1/').then(response => {
+        this.telegramBotName = response.data.telegram_bot_name
+        this.telegramBotLink = this.telegramBotName ? `https://t.me/${this.telegramBotName}` : null
+        this.defectDojoUrl = response.data.defect_dojo_url
+        this.defectDojoEnabled = response.data.defect_dojo_enabled
+      })
+    },
     getOnePage (endpoint, params = null, requiredAuth = true, extraHeaders = null) {
       return this.get(endpoint, this.getPage(), this.getLimit(), params, requiredAuth, extraHeaders)
     },
@@ -134,14 +148,25 @@ export default {
           return Promise.reject(error)
         })
     },
+    getUrl (endpoint) {
+      if (this.backendRootPath) {
+        endpoint = this.backendRootPath + endpoint
+      }
+      if (this.$store.state.backendUrl) {
+        var endpointUrl = new URL(this.$store.state.backendUrl)
+        endpointUrl.pathname = endpoint
+        return endpointUrl.href
+      }
+      return endpoint
+    },
     request (method, endpoint, queryData = null, bodyData = null, requiredAuth = true, extraHeaders = null, allowUnauth = false, retry = false) {
       let httpRequest = null
       if (bodyData) {
-        httpRequest = method(endpoint, this.cleanBody(bodyData), { headers: this.headers(requiredAuth, extraHeaders) })
+        httpRequest = method(this.getUrl(endpoint), this.cleanBody(bodyData), { headers: this.headers(requiredAuth, extraHeaders) })
       } else if (queryData) {
-        httpRequest = method(endpoint, { params: this.cleanParams(queryData), headers: this.headers(requiredAuth, extraHeaders) })
+        httpRequest = method(this.getUrl(endpoint), { params: this.cleanParams(queryData), headers: this.headers(requiredAuth, extraHeaders) })
       } else {
-        httpRequest = method(endpoint, { headers: this.headers(requiredAuth, extraHeaders) })
+        httpRequest = method(this.getUrl(endpoint), { headers: this.headers(requiredAuth, extraHeaders) })
       }
       return httpRequest
         .then(response => { return Promise.resolve(response) })
@@ -161,7 +186,7 @@ export default {
     refresh () {
       if (!this.$store.state.refreshing) {
         this.$store.dispatch('changeRefreshStatus')
-        return axios.post('/api/token/refresh/', { refresh: localStorage[refreshTokenKey] }, this.headers())
+        return axios.post(this.getUrl('/api/token/refresh/'), { refresh: sessionStorage.getItem(refreshTokenKey) }, this.headers())
           .then(response => {
             removeTokens()
             processTokens(response.data)
@@ -183,7 +208,7 @@ export default {
         Accept: 'application/json'
       }
       if (this.$store.state.user !== null && requiredAuth) {
-        requestHeaders.Authorization = `Bearer ${localStorage[accessTokenKey]}`
+        requestHeaders.Authorization = `Bearer ${sessionStorage.getItem(accessTokenKey)}`
       }
       if (extraHeaders) {
         requestHeaders = Object.assign({}, requestHeaders, extraHeaders)
@@ -208,7 +233,7 @@ export default {
     cleanParams (params) {
       if (params) {
         let cleanParams = {}
-        for (var field in params) {
+        for (let field in params) {
           if (![''. null, undefined].includes(params[field])) {
             cleanParams[field] = params[field]
           }
@@ -219,7 +244,7 @@ export default {
     },
     cleanBody (body) {
       if (body) {
-        for (var field in body) {
+        for (let field in body) {
           if (['', null, undefined].includes(body[field])) {
             body[field] = null
           }
@@ -247,11 +272,46 @@ export default {
     validateText (value) {
       return this.validate(value, this.textRegex)
     },
-    validatePath (value) {
-      return this.validate(value, this.pathRegex)
-    },
     validateCve (value) {
       return this.validate(value, this.cveRegex)
+    },
+    validateDefectDojoKey (value) {
+      return this.validate(value, this.defectDojoKeyRegex)
+    },
+    validateTelegramToken (value) {
+      return this.validate(value, this.telegramTokenRegex)
+    },
+    validateCredential (value) {
+      return this.validate(value, this.credentialRegex)
+    },
+    validateUrl (value) {
+      try {
+        new URL(value);
+        return true
+      } catch (e) {
+        return false;
+      }
+    },
+    duration (start, end) {
+      const startDate = moment(start)
+      const endDate = moment(end)
+      const duration = moment.duration(endDate.diff(startDate))
+      let text = ''
+      const values = [
+        {'value': duration.days(), 'text': 'd'},
+        {'value': duration.hours(), 'text': 'h'},
+        {'value': duration.minutes(), 'text': 'm'},
+        {'value': duration.seconds(), 'text': 's'}
+      ]
+      for (let index in values) {
+        if (values[index].value > 0) {
+          text += values[index].value.toString() + ' ' + values[index].text + ' '
+        }
+      }
+      return text
+    },
+    formatDate (date) {
+      return moment(date).format('YYYY-MM-DD HH:mm')
     }
   }
 }

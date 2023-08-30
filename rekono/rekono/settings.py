@@ -15,8 +15,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
 
-from findings.enums import Severity
+from authentications.enums import AuthenticationType
+from findings.enums import PathType, Severity
 from input_types.enums import InputTypeNames
+from resources.enums import WordlistType
 from targets.enums import TargetType
 from tasks.enums import Status, TimeUnit
 from tools.enums import IntensityRank
@@ -25,22 +27,21 @@ from rekono.config import RekonoConfigLoader
 from rekono.environment import (ENV_REKONO_HOME, RKN_ALLOWED_HOSTS,
                                 RKN_CMSEEK_RESULTS, RKN_DB_HOST, RKN_DB_NAME,
                                 RKN_DB_PASSWORD, RKN_DB_PORT, RKN_DB_USER,
-                                RKN_DD_API_KEY, RKN_DD_URL, RKN_EMAIL_HOST,
-                                RKN_EMAIL_PASSWORD, RKN_EMAIL_PORT,
-                                RKN_EMAIL_USER, RKN_FRONTEND_URL,
-                                RKN_GITTOOLS_DIR, RKN_LOG4J_SCANNER_DIR,
-                                RKN_OTP_EXPIRATION_HOURS, RKN_RQ_HOST,
-                                RKN_RQ_PORT, RKN_SECRET_KEY, RKN_TELEGRAM_BOT,
-                                RKN_TELEGRAM_TOKEN, RKN_TRUSTED_PROXY,
-                                RKN_UPLOAD_FILES_MAX_MB)
+                                RKN_EMAIL_HOST, RKN_EMAIL_PASSWORD,
+                                RKN_EMAIL_PORT, RKN_EMAIL_USER,
+                                RKN_FRONTEND_URL, RKN_GITTOOLS_DIR,
+                                RKN_LOG4J_SCAN_DIR, RKN_ROOT_PATH, RKN_RQ_HOST,
+                                RKN_RQ_PORT, RKN_SECRET_KEY,
+                                RKN_SPRING4SHELL_SCAN_DIR, RKN_TRUSTED_PROXY)
 
 ################################################################################
 # Rekono basic information                                                     #
 ################################################################################
 
-DESCRIPTION = 'Execute full pentesting processes combining multiple hacking tools automatically'    # Rekono description
-VERSION = '1.0.0'                                                               # Rekono version
-
+# Rekono description
+DESCRIPTION = 'Automation platform that combines different hacking tools to complete pentesting processes'
+VERSION = '1.6.3'                                                               # Rekono version
+TESTING = 'test' in sys.argv                                                    # Tests execution
 
 ################################################################################
 # Paths and directories                                                        #
@@ -49,12 +50,15 @@ VERSION = '1.0.0'                                                               
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')                               # Frontend directory
-
-# Rekono home directory. By default /opt/rekono
-REKONO_HOME = os.getenv(ENV_REKONO_HOME, '/opt/rekono')
-if not os.path.isdir(REKONO_HOME):                                              # Rekono home doesn't exist
-    REKONO_HOME = str(BASE_DIR.parent)                                          # Use current directory as home
+if not TESTING:
+    # Rekono home directory. By default /opt/rekono
+    REKONO_HOME = os.getenv(ENV_REKONO_HOME, '/opt/rekono')
+    if not os.path.isdir(REKONO_HOME):                                          # Rekono home doesn't exist
+        REKONO_HOME = str(BASE_DIR.parent)                                      # Use current directory as home
+else:
+    REKONO_HOME = os.path.join(BASE_DIR, 'testing', 'home')                     # Internal home directory for testing
+    if not os.path.isdir(REKONO_HOME):                                          # Initialize home directory for testing
+        os.mkdir(REKONO_HOME)
 
 REPORTS_DIR = os.path.join(REKONO_HOME, 'reports')                              # Directory to save tool reports
 WORDLIST_DIR = os.path.join(REKONO_HOME, 'wordlists')                           # Directory to save wordlist files
@@ -68,6 +72,7 @@ CONFIG_FILE = ''                                                                
 for filename in ['config.yaml', 'config.yml', 'rekono.yaml', 'rekono.yml']:     # For each config filename
     if os.path.isfile(os.path.join(REKONO_HOME, filename)):                     # Check if config file exists
         CONFIG_FILE = os.path.join(REKONO_HOME, filename)
+        break
 CONFIG = RekonoConfigLoader(CONFIG_FILE)                                        # Load configuration
 
 
@@ -92,14 +97,17 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'authentications',
     'executions',
     'findings',
     'input_types',
+    'parameters',
     'processes',
     'projects',
     'rekono',
     'resources',
     'security',
+    'system',
     'targets',
     'tasks',
     'telegram_bot',
@@ -140,8 +148,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'rekono.wsgi.application'
 
-TESTING = 'test' in sys.argv                                                    # Tests execution
-
 
 ################################################################################
 # Security                                                                     #
@@ -167,8 +173,7 @@ else:
 
 AUTH_USER_MODEL = 'users.User'                                                  # User model
 
-# OTP expiration time in hours
-OTP_EXPIRATION_HOURS = int(os.getenv(RKN_OTP_EXPIRATION_HOURS, CONFIG.OTP_EXPIRATION_HOURS))
+OTP_EXPIRATION_HOURS = 24                                                       # OTP expiration time in hours
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
@@ -204,9 +209,6 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS512',
     'SIGNING_KEY': SECRET_KEY
 }
-
-# Max allowed size in MB for upload files
-UPLOAD_FILES_MAX_MB = int(1 if TESTING else os.getenv(RKN_UPLOAD_FILES_MAX_MB, CONFIG.UPLOAD_FILES_MAX_MB))
 
 LOGGING = {                                                                     # Logging configuration
     'version': 1,
@@ -247,6 +249,7 @@ LOGGING = {                                                                     
 # API Rest                                                                     #
 ################################################################################
 
+# nosemgrep: python.django.security.audit.django-rest-framework.missing-throttle-config.missing-throttle-config
 REST_FRAMEWORK: Dict[str, Any] = {
     'DEFAULT_METADATA_CLASS': None,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -306,7 +309,11 @@ SPECTACULAR_SETTINGS = {
         'IntensityEnum': IntensityRank.choices,
         'InputTypeNamesEnum': InputTypeNames.choices,
         'TargetTypeEnum': TargetType.choices,
-    }
+        'AuthenticationTypeEnum': AuthenticationType.choices,
+        'PathTypeEnum': PathType.choices,
+        'WordlistTypeEnum': WordlistType.choices,
+    },
+    'SCHEMA_PATH_PREFIX_INSERT': os.getenv(RKN_ROOT_PATH, CONFIG.ROOT_PATH),
 }
 
 
@@ -345,25 +352,25 @@ RQ_QUEUES = {
         'HOST': os.getenv(RKN_RQ_HOST, CONFIG.RQ_HOST),
         'PORT': os.getenv(RKN_RQ_PORT, CONFIG.RQ_PORT),
         'DB': 0,
-        'DEFAULT_TIMEOUT': 60                                                   # 1 minute
+        'DEFAULT_TIMEOUT': 3600                                                 # 1 hour
     },
     'executions-queue': {
         'HOST': os.getenv(RKN_RQ_HOST, CONFIG.RQ_HOST),
         'PORT': os.getenv(RKN_RQ_PORT, CONFIG.RQ_PORT),
         'DB': 0,
-        'DEFAULT_TIMEOUT': 7200                                                 # 2 hours
+        'DEFAULT_TIMEOUT': 28800                                                # 8 hours
     },
     'findings-queue': {
         'HOST': os.getenv(RKN_RQ_HOST, CONFIG.RQ_HOST),
         'PORT': os.getenv(RKN_RQ_PORT, CONFIG.RQ_PORT),
         'DB': 0,
-        'DEFAULT_TIMEOUT': 300                                                  # 5 minutes
+        'DEFAULT_TIMEOUT': 10800                                                # 3 hours
     },
     'emails-queue': {
         'HOST': os.getenv(RKN_RQ_HOST, CONFIG.RQ_HOST),
         'PORT': os.getenv(RKN_RQ_PORT, CONFIG.RQ_PORT),
         'DB': 0,
-        'DEFAULT_TIMEOUT': 300                                                  # 5 minutes
+        'DEFAULT_TIMEOUT': 3600                                                 # 1 hour
     }
 }
 
@@ -381,41 +388,21 @@ EMAIL_USE_TLS = CONFIG.EMAIL_TLS
 
 
 ################################################################################
-# Telegram                                                                     #
-################################################################################
-
-TELEGRAM_BOT = os.getenv(RKN_TELEGRAM_BOT, CONFIG.TELEGRAM_BOT)                 # Telegram bot name
-TELEGRAM_TOKEN = os.getenv(RKN_TELEGRAM_TOKEN, CONFIG.TELEGRAM_TOKEN)           # Telegram token provided by BotFather
-
-
-################################################################################
-# Defect-Dojo                                                                  #
-################################################################################
-
-DEFECT_DOJO = {
-    'URL': os.getenv(RKN_DD_URL, CONFIG.DD_URL),
-    'API_KEY': os.getenv(RKN_DD_API_KEY, CONFIG.DD_API_KEY),                    # Defect-Dojo API key
-    'VERIFY_TLS': CONFIG.DD_VERIFY_TLS,                                         # Defect-Dojo TLS verification
-    'TAGS': CONFIG.DD_TAGS,                                                     # Tags to be included in DD entities
-    'PRODUCT_TYPE': CONFIG.DD_PRODUCT_TYPE,                                     # Product type for new DD products
-    'TEST_TYPE': CONFIG.DD_TEST_TYPE,                                           # Rekono test type name in Defect-Dojo
-    'TEST': CONFIG.DD_TEST                                                      # Rekono test name in Defect-Dojo
-}
-
-
-################################################################################
 # Tools                                                                        #
 ################################################################################
 
 TOOLS = {
-    'cmseek': {
-        'directory': os.getenv(RKN_CMSEEK_RESULTS, CONFIG.TOOLS_CMSEEK_DIR)     # CMSeeK directory
+    'cmseek': {                                                                 # CMSeeK
+        'directory': os.getenv(RKN_CMSEEK_RESULTS, CONFIG.TOOLS_CMSEEK_DIR)
     },
-    'log4j-scanner': {
-        'directory': os.getenv(RKN_LOG4J_SCANNER_DIR, CONFIG.TOOLS_LOG4J_SCANNER_DIR)     # Log4j Scanner directory
+    'log4j-scan': {                                                             # Log4j Scan
+        'directory': os.getenv(RKN_LOG4J_SCAN_DIR, CONFIG.TOOLS_LOG4J_SCAN_DIR)
     },
-    'gittools': {
-        'directory': os.getenv(RKN_GITTOOLS_DIR, CONFIG.TOOLS_GITTOOLS_DIR)     # GitTools directory
+    'spring4shell-scan': {                                                      # Spring4Shell Scan
+        'directory': os.getenv(RKN_SPRING4SHELL_SCAN_DIR, CONFIG.TOOLS_SPRING4SHELL_SCAN_DIR)
+    },
+    'gittools': {                                                               # GitTools
+        'directory': os.getenv(RKN_GITTOOLS_DIR, CONFIG.TOOLS_GITTOOLS_DIR)
     }
 }
 
@@ -445,15 +432,11 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(REKONO_HOME, 'static')
-
-if not os.path.isdir(STATIC_ROOT):
-    os.mkdir(STATIC_ROOT)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field

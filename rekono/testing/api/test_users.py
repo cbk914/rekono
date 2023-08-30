@@ -2,11 +2,11 @@ from typing import Dict
 
 from security.otp import generate
 from telegram_bot.models import TelegramChat
-from testing.api.base import RekonoTestCase
+from testing.api.base import RekonoApiTestCase
 from users.models import User
 
 
-class UsersTest(RekonoTestCase):
+class UsersTest(RekonoApiTestCase):
     '''Test cases for Users module.'''
 
     def setUp(self) -> None:
@@ -107,21 +107,21 @@ class UsersTest(RekonoTestCase):
         '''Test filter feature by project.'''
         # Get users that belong to created project
         content = self.api_test(
-            self.client.get, f'{self.endpoint}?project={self.project.id}&o=-username', expected={'count': 1}
+            self.client.get, f'{self.endpoint}?project={self.project.id}&order=-username', expected={'count': 1}
         )
         self.check_fields(['id', 'username', 'email'], content['results'][0], self.admin)
         # Get users that don't belong to created project
         content = self.api_test(
-            self.client.get, f'{self.endpoint}?project__ne={self.project.id}&o=-username', expected={'count': 1}
+            self.client.get, f'{self.endpoint}?project__ne={self.project.id}&order=-username', expected={'count': 1}
         )
         self.check_fields(['id', 'username', 'email'], content['results'][0], self.other)
 
     def test_filter_by_project_not_found(self) -> None:
         '''Test filter feature by not found project.'''
         # Get users that belong to unexisting project: No users
-        self.api_test(self.client.get, f'{self.endpoint}?project=-1&o=-username', expected={'count': 0})
+        self.api_test(self.client.get, f'{self.endpoint}?project=-1&order=-username', expected={'count': 0})
         # Get users that don't belong to unexisting project: All users
-        self.api_test(self.client.get, f'{self.endpoint}?project__ne=-1&o=-username', expected={'count': 2})
+        self.api_test(self.client.get, f'{self.endpoint}?project__ne=-1&order=-username', expected={'count': 2})
 
     def test_change_role(self) -> None:
         '''Test change role feature.'''

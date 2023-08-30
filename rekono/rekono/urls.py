@@ -24,12 +24,15 @@ from rest_framework.urlpatterns import format_suffix_patterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),                                            # Admin site
-    path('api/', include('executions.urls')),                                   # Rekono API Rest
+    path('api/', include('authentications.urls')),                              # Rekono API Rest
+    path('api/', include('executions.urls')),
     path('api/', include('findings.urls')),
+    path('api/', include('parameters.urls')),
     path('api/', include('processes.urls')),
     path('api/', include('projects.urls')),
     path('api/', include('resources.urls')),
     path('api/', include('security.urls')),
+    path('api/', include('system.urls')),
     path('api/', include('targets.urls')),
     path('api/', include('tasks.urls')),
     path('api/', include('tools.urls')),

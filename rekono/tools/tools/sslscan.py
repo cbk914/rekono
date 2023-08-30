@@ -1,12 +1,12 @@
-import xml.etree.ElementTree as parser
 from typing import List, Union
 
+import defusedxml.ElementTree as parser
 from findings.enums import Severity
 from findings.models import Technology, Vulnerability
 from tools.tools.base_tool import BaseTool
 
 
-class SslscanTool(BaseTool):
+class Sslscan(BaseTool):
     '''Sslscan tool class.'''
 
     def get_technology(self, technologies: List[Technology], sslversion: str) -> Union[Technology, None]:
@@ -25,7 +25,10 @@ class SslscanTool(BaseTool):
     def parse_output_file(self) -> None:
         '''Parse tool output file to create finding entities.'''
         technologies: List[Technology] = []
-        root = parser.parse(self.path_output).getroot()                         # Report root
+        try:
+            root = parser.parse(self.path_output).getroot()                     # Report root
+        except parser.ParseError:
+            return
         tests = root.findall('ssltest')                                         # Get test
         for test in tests:                                                      # For each test
             for item in test:                                                   # For each item
